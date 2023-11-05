@@ -1,0 +1,59 @@
+
+body {
+    background:rgb(23, 23, 70);
+}
+.greenState{
+    background: rgba(67, 124, 36, 0.4);
+}
+.yellowState{
+    background: rgba(154, 139, 24, 0.4);
+}
+.redState{
+    background: rgba(170, 20, 20, 0.4);
+}
+.tableDiv {
+    border-radius: 40%;
+    position: absolute;
+    padding: 10px;
+}
+.divLev1 {
+    width: 10%;
+    height: 18px;
+    top: 130px;
+}
+.divLev2 {
+    width: 12%;
+    height: 22px;
+    top: 230px;
+}
+.divLev3 {
+    width: 14%;
+    height: 26px;
+    top: 340px;
+}
+.block {
+    border-radius: 13px;
+    background-color: rgb(49, 47, 90);
+    position: relative;
+}
+.h1 {
+    margin-top: 50px;
+    margin-left: 26%;
+    color: rgb(22, 108, 119);
+}
+.text {
+    margin-top: 40px;
+    font-size: 40px;
+}
+.line1 {
+    margin-left: 20%;
+}
+.line2 {
+    margin-left: 30%;
+}
+.line3 {
+    margin-left: 30%;
+}
+.hidden {
+    visibility: hidden;
+}
