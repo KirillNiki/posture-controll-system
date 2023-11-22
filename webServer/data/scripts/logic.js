@@ -98,7 +98,9 @@ function CountTimesADayHour() {
   let dayCount = 0;
 
   for (let i = 0; i < data.infoData.length; i++) {
+
     let currentHour = date.getHours();
+    console.log(Number(data.infoData[i].time.slice(7, 9)))
 
     if (currentHour - Number(data.infoData[i].time.slice(7, 9)) <= 1)
       hourCount++;
@@ -146,11 +148,6 @@ async function Train() {
     }
   }
   let sittingTimer = data.sittingTimer;
-
-
-  console.log(`tme ${Date.now()}`)
-  console.log(`sitting timer ${sittingTimer}`)
-  console.log(Date.now() - sittingTimer)
 
   if (((isTestTrain && (Date.now() - sittingTimer >= 30)) || Date.now() - sittingTimer >= maxSittingTime) && !trainStarted) {
     trainObj.classList.remove('hidden');
