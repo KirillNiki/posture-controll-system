@@ -98,7 +98,7 @@ void setup() {
     if (!isTrain) {
       sittingTimer = watch.gettimeUnix();
     }
-    request->send(200);
+    request->send(SPIFFS, "/index.html");
   });
   
   server.on("/scripts/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
