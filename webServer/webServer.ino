@@ -2,6 +2,7 @@
 #include "ESPAsyncWebServer.h"
 #include "ArduinoJson.h"
 #include "WiFi.h"
+#include "FS.h"
 #include "SPIFFS.h"
 #include "SoftwareSerial.h"
 #include "iarduino_RTC.h"
@@ -38,8 +39,8 @@ struct infoFileStruct {
 };
 infoFileStruct infoFile;
 
-
 const int weightMesureTime = 60 * 1000;
+char* paths[30];
 
   
 void setup() {
@@ -100,19 +101,30 @@ void setup() {
     }
     request->send(SPIFFS, "/index.html");
   });
-  
-  server.on("/scripts/app.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/scripts/app.js");
-  });
 
-  server.on("/scripts/logic.js", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/scripts/logic.js");
-  });
-  
-  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/style.css");
-  });
-  
+
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+  int index = 0;
+  while(file) {
+    char* path = (char*)file.path();
+    paths[index] = new char[strlen(path) + 1];
+    strcpy(paths[index], path);
+    
+    if (paths[index] == "/") {
+      continue;
+    }
+
+    server.on(paths[index], HTTP_GET, [index](AsyncWebServerRequest *request) {
+      Serial.println(index);
+      Serial.println(paths[index]);
+      request->send(SPIFFS, paths[index]);
+    });
+    file = root.openNextFile();
+    index++;
+  }
+
+
   server.begin();
   watch.begin();
   mySerial.begin(9600, SWSERIAL_8N1);
@@ -124,7 +136,7 @@ void setup() {
 }
 
 
-void loop() {
+void loop() {  
   if (millis() - readingTimer > 2000) {
     Serial.println(watch.gettime("d-m-Y, H:i:s, D"));
     currentWeight = TwoMaxAvarage (weightValues) * factor;
