@@ -106,7 +106,11 @@ void setup() {
     strcpy(paths[index], path);
     
     if (paths[index] != "/") {
-      ResourceNode * nodeFile = new ResourceNode(paths[index], "GET", &callback);
+      ResourceNode * nodeFile = new ResourceNode(paths[index], "GET", [](HTTPRequest *req, HTTPResponse *res) {
+        char* mybuffer = ReadFile(paths[index]);
+        res->print(mybuffer);
+        delete mybuffer;
+      });
       secureServer->registerNode(nodeFile);
     }
     file = root.openNextFile();
@@ -180,7 +184,7 @@ void setup() {
 
 template <int index> 
 void callback(HTTPRequest *req, HTTPResponse *res) {
-        char* mybuffer = ReadFile(paths[index]);
+char* mybuffer = ReadFile(paths[index]);
         res->print(mybuffer);
         delete mybuffer;
       }
