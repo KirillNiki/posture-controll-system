@@ -1,3 +1,8 @@
+#include "HTTPSServer.hpp"
+#include "HTTPRequest.hpp"
+#include "HTTPResponse.hpp"
+#include "SSLCert.hpp"
+using namespace httpsserver;
 
 #include "ESPAsyncWebServer.h"
 #include "ArduinoJson.h"
@@ -12,10 +17,11 @@ iarduino_RTC watch(RTC_DS1302, 2, 0, 4);
 
 const char* ssid = "posture-controll-system";
 const char* password = "kirill123";
-AsyncWebServer server(80);
+SSLCert* cert;
+HTTPSServer* secureServer;
 
-int weightValues[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 SoftwareSerial mySerial(16, 17);
+int weightValues[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 int lastWeight = 0;
 float currentWeight = 0;
 
@@ -42,90 +48,124 @@ infoFileStruct infoFile;
 const int weightMesureTime = 60 * 1000;
 char* paths[30];
 
-  
+
 void setup() {
   sittingTimer = watch.gettimeUnix();
-  
-  Serial.println("start");
   Serial.begin(9600);
   SPIFFS.begin(true);
+  
+  cert = new SSLCert();
+  int createCertResult = createSelfSignedCert(
+    *cert,
+    KEYSIZE_2048,
+    "CN=myesp.local,O=acme,C=US");
+ 
+  if (createCertResult != 0) {
+    Serial.printf("Error generating certificate");
+    return; 
+  }
+  Serial.println("Certificate generated");
+  secureServer = new HTTPSServer(cert);
+
   WiFi.mode(WIFI_AP);
   WiFi.softAP(ssid, password);
   Serial.println(WiFi.softAPIP());
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(SPIFFS, "/index.html");
-  });
-
-  server.on("/watchTime", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-    [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-      DynamicJsonBuffer jsonBuffer;
-      JsonObject& root = jsonBuffer.parseObject((const char*)data);
-      
-      if (root.success() && root.containsKey("time") && !synchronized) {
-        ChangingTime(root["time"].asString());
-        synchronized = true;
-      }
-      request->send(200);
+  
+  ResourceNode * nodeRoot = new ResourceNode("/", "GET", [](HTTPRequest *req, HTTPResponse *res) {
+    res->setHeader("Content-Type", "text/html");
+    res->print(ReadFile("/index.html"));
   });
   
-  server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
-    Serial.println("sending data >>>>>>>>>>>>>>>>");
-    AsyncResponseStream *response = request->beginResponseStream("application/json");
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
-    JsonArray& weights = jsonBuffer.createArray();
-    JsonArray& infoData = jsonBuffer.createArray();
-
-    for (int i = 0; i < 10; i++) {
-      weights.add(weightValues[i]);
-    }
-    for (int i = 0; i < 12; i++) {
-      JsonObject& info = jsonBuffer.createObject();
-      info["time"] = infoFile.InfoFileData[i].specificTime;
-      info["weight"] = infoFile.InfoFileData[i].weightAtTime;
-      infoData.add(info);
-    }
-    root["weights"] = weights;
-    root["infoData"] = infoData;
-    root["sittingTimer"] = String(sittingTimer - (9 * 60 * 60)) + "000";
-    
-    root.printTo(*response);
-    request->send(response);
-  });
-
-  server.on("/train", HTTP_GET, [](AsyncWebServerRequest *request) {
-    isTrain = !isTrain;
-    if (!isTrain) {
-      sittingTimer = watch.gettimeUnix();
-    }
-    request->send(SPIFFS, "/index.html");
-  });
-
-
-  File root = SPIFFS.open("/");
-  File file = root.openNextFile();
-  int index = 0;
-  while(file) {
-    char* path = (char*)file.path();
-    paths[index] = new char[strlen(path) + 1];
-    strcpy(paths[index], path);
-    
-    if (paths[index] == "/") {
-      continue;
-    }
-
-    server.on(paths[index], HTTP_GET, [index](AsyncWebServerRequest *request) {
-      Serial.println(index);
-      Serial.println(paths[index]);
-      request->send(SPIFFS, paths[index]);
-    });
-    file = root.openNextFile();
-    index++;
+  secureServer->registerNode(nodeRoot);
+  secureServer->start();
+  if (secureServer->isRunning()) {
+    Serial.println("Server ready.");
   }
+  
+  
+
+  // ResourceNode * nodeTime = new ResourceNode("/watchTime", "POST", [](HTTPRequest *req, HTTPResponse *res){
+  //     DynamicJsonBuffer jsonBuffer;
+  //     const char* buffer = new char[req->getContentLength()];
+  //     req->readChars(buffer, sizeof(buffer));
+  //     JsonObject& root = jsonBuffer.parseObject(buffer);
+      
+  //     if (root.success() && root.containsKey("time") && !synchronized) {
+  //       ChangingTime(root["time"].asString());
+  //       synchronized = true;
+  //     }
+  //     request->send(200);
+  // });
+
+  // server.on("/watchTime", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+  //   [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+  //     DynamicJsonBuffer jsonBuffer;
+  //     JsonObject& root = jsonBuffer.parseObject((const char*)data);
+      
+  //     if (root.success() && root.containsKey("time") && !synchronized) {
+  //       ChangingTime(root["time"].asString());
+  //       synchronized = true;
+  //     }
+  //     request->send(200);
+  // });
+  
+  // server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //   Serial.println("sending data >>>>>>>>>>>>>>>>");
+  //   AsyncResponseStream *response = request->beginResponseStream("application/json");
+  //   DynamicJsonBuffer jsonBuffer;
+  //   JsonObject& root = jsonBuffer.createObject();
+  //   JsonArray& weights = jsonBuffer.createArray();
+  //   JsonArray& infoData = jsonBuffer.createArray();
+
+  //   for (int i = 0; i < 10; i++) {
+  //     weights.add(weightValues[i]);
+  //   }
+  //   for (int i = 0; i < 12; i++) {
+  //     JsonObject& info = jsonBuffer.createObject();
+  //     info["time"] = infoFile.InfoFileData[i].specificTime;
+  //     info["weight"] = infoFile.InfoFileData[i].weightAtTime;
+  //     infoData.add(info);
+  //   }
+  //   root["weights"] = weights;
+  //   root["infoData"] = infoData;
+  //   root["sittingTimer"] = String(sittingTimer - (9 * 60 * 60)) + "000";
+    
+  //   root.printTo(*response);
+  //   request->send(response);
+  // });
+
+  // server.on("/train", HTTP_GET, [](AsyncWebServerRequest *request) {
+  //   isTrain = !isTrain;
+  //   if (!isTrain) {
+  //     sittingTimer = watch.gettimeUnix();
+  //   }
+  //   request->send(SPIFFS, "/index.html");
+  // });
 
 
-  server.begin();
+  // File root = SPIFFS.open("/");
+  // File file = root.openNextFile();
+  // int index = 0;
+  // while(file) {
+  //   char* path = (char*)file.path();
+  //   paths[index] = new char[strlen(path) + 1];
+  //   strcpy(paths[index], path);
+    
+  //   if (paths[index] == "/") {
+  //     continue;
+  //   }
+
+  //   server.on(paths[index], HTTP_GET, [index](AsyncWebServerRequest *request) {
+  //     Serial.println(index);
+  //     Serial.println(paths[index]);
+  //     request->send(SPIFFS, paths[index]);
+  //   });
+  //   file = root.openNextFile();
+  //   index++;
+  // }
+
+
   watch.begin();
   mySerial.begin(9600, SWSERIAL_8N1);
   
@@ -136,7 +176,9 @@ void setup() {
 }
 
 
-void loop() {  
+void loop() {
+  secureServer->loop();
+ 
   if (millis() - readingTimer > 2000) {
     Serial.println(watch.gettime("d-m-Y, H:i:s, D"));
     currentWeight = TwoMaxAvarage (weightValues) * factor;
@@ -145,41 +187,49 @@ void loop() {
     SittingTimerSetup();
     readingTimer = millis();
   }
-
   if (millis() - writingTimer > weightMesureTime && currentWeight != 0) {
       InfoFileWriting();
       writingTimer = millis();
   }
-  delay(50);
+  delay(10);
 }
-
 
 
 void AnalogDataRead() {
   Serial.println("reading data >>>>>>");
   mySerial.print(String("give"));
-  while (!mySerial.available()) {}
+  int counter = 0;
+  int max_counter = 10;
   
-  int arrayCounter = 0;
-  String currentVal = "";
-  int dataSize = mySerial.available();
-  char* myDataPointer = new char[dataSize + 1];
-
-  delay(10);
-  mySerial.readBytes(myDataPointer, dataSize);
-  myDataPointer[dataSize] = 0;
-        
-  for (int i = 0; i < dataSize; i++) {
-    if (myDataPointer[i] != ',') {
-      currentVal += String(myDataPointer[i]);
-      
-    } else {
-      weightValues[arrayCounter] = currentVal.toInt();
-      arrayCounter++;
-      currentVal = "";
+  while (!mySerial.available()) {
+    counter ++;
+    if (counter == max_counter) {
+      break;
     }
   }
-  delete[] myDataPointer;
+
+  if (counter < max_counter) {
+    int arrayCounter = 0;
+    String currentVal = "";
+    int dataSize = mySerial.available();
+    char* myDataPointer = new char[dataSize + 1];
+
+    delay(10);
+    mySerial.readBytes(myDataPointer, dataSize);
+    myDataPointer[dataSize] = 0;
+        
+    for (int i = 0; i < dataSize; i++) {
+      if (myDataPointer[i] != ',') {
+        currentVal += String(myDataPointer[i]);
+      
+      } else {
+        weightValues[arrayCounter] = currentVal.toInt();
+        arrayCounter++;
+        currentVal = "";
+      }
+    }
+    delete[] myDataPointer;
+  }
 }
 
 
@@ -226,7 +276,6 @@ float TwoMaxAvarage (int Array[]) {
 }
 
 
-
 void ChangingTime(String currentTimeString) {
     double currentTime = currentTimeString.toDouble();
     if (abs(round(currentTime / 1000) - watch.gettimeUnix()) > 20) {
@@ -234,7 +283,6 @@ void ChangingTime(String currentTimeString) {
       watch.settime(-1,-1, (watch.Hours + 9));
     }
 }
-
 
 
 void InfoFileWriting() {
@@ -273,6 +321,17 @@ void InfoFileReading() {
   
   readFile.readBytes((char*)&infoFile, fsize);
   readFile.close();
+}
+
+
+char* ReadFile(String path) {
+  File readFile = SPIFFS.open(path, FILE_READ);
+  long fsize = readFile.size();
+  char* mybuffer = new char[fsize + 1];
+  
+  readFile.readBytes(mybuffer, fsize);
+  readFile.close();
+  return mybuffer;
 }
 
 
