@@ -12,6 +12,8 @@ using namespace httpsserver;
 #include "SoftwareSerial.h"
 #include "iarduino_RTC.h"
 
+AsyncWebServer server(80);
+
 
 iarduino_RTC watch(RTC_DS1302, 2, 0, 4);
 
@@ -71,13 +73,47 @@ void setup() {
   WiFi.softAP(ssid, password);
   Serial.println(WiFi.softAPIP());
 
+
   
+//  server.on("/watchTime", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+//     [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+//       DynamicJsonBuffer jsonBuffer;
+//       JsonObject& root = jsonBuffer.parseObject((const char*)data);
+//      
+//       if (root.success() && root.containsKey("time") && !synchronized) {
+//         ChangingTime(root["time"].asString());
+//         synchronized = true;
+//       }
+//       request->send(200);
+//   });
+
+
+
   ResourceNode * nodeRoot = new ResourceNode("/", "GET", [](HTTPRequest *req, HTTPResponse *res) {
     res->setHeader("Content-Type", "text/html");
-    res->print(ReadFile("/index.html"));
+    char* mybuffer = ReadFile("/index.html");
+    res->print(mybuffer);
+    delete mybuffer;
   });
-  
   secureServer->registerNode(nodeRoot);
+
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+  int index = 0;
+  while(file) {
+    char* path = (char*)file.path();
+    paths[index] = new char[strlen(path) + 1];
+    strcpy(paths[index], path);
+    
+    if (paths[index] != "/") {
+      ResourceNode * nodeFile = new ResourceNode(paths[index], "GET", &callback);
+      secureServer->registerNode(nodeFile);
+    }
+    file = root.openNextFile();
+    index++;
+  }
+
+  
   secureServer->start();
   if (secureServer->isRunning()) {
     Serial.println("Server ready.");
@@ -98,17 +134,6 @@ void setup() {
   //     request->send(200);
   // });
 
-  // server.on("/watchTime", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-  //   [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-  //     DynamicJsonBuffer jsonBuffer;
-  //     JsonObject& root = jsonBuffer.parseObject((const char*)data);
-      
-  //     if (root.success() && root.containsKey("time") && !synchronized) {
-  //       ChangingTime(root["time"].asString());
-  //       synchronized = true;
-  //     }
-  //     request->send(200);
-  // });
   
   // server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
   //   Serial.println("sending data >>>>>>>>>>>>>>>>");
@@ -144,28 +169,6 @@ void setup() {
   // });
 
 
-  // File root = SPIFFS.open("/");
-  // File file = root.openNextFile();
-  // int index = 0;
-  // while(file) {
-  //   char* path = (char*)file.path();
-  //   paths[index] = new char[strlen(path) + 1];
-  //   strcpy(paths[index], path);
-    
-  //   if (paths[index] == "/") {
-  //     continue;
-  //   }
-
-  //   server.on(paths[index], HTTP_GET, [index](AsyncWebServerRequest *request) {
-  //     Serial.println(index);
-  //     Serial.println(paths[index]);
-  //     request->send(SPIFFS, paths[index]);
-  //   });
-  //   file = root.openNextFile();
-  //   index++;
-  // }
-
-
   watch.begin();
   mySerial.begin(9600, SWSERIAL_8N1);
   
@@ -174,6 +177,13 @@ void setup() {
     InfoFileReading ();
   }
 }
+
+template <int index> 
+void callback(HTTPRequest *req, HTTPResponse *res) {
+        char* mybuffer = ReadFile(paths[index]);
+        res->print(mybuffer);
+        delete mybuffer;
+      }
 
 
 void loop() {
